@@ -17,9 +17,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.provisioning.JdbcUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
-import static org.springframework.security.config.Customizer.withDefaults;
-
 import javax.sql.DataSource;
+
+import static org.springframework.security.config.Customizer.withDefaults;
 
 @EnableWebSecurity
 @Configuration
@@ -28,28 +28,29 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/h2-console/**", "/login", "/register").permitAll()
-                        .anyRequest().authenticated())
-
-                .httpBasic(withDefaults())
-                .formLogin(withDefaults())
-
-                .csrf(csrf -> csrf
-                        .ignoringRequestMatchers("/h2-console/**"));
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/h2-console/**", "/auth/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .httpBasic(withDefaults())
+            .formLogin(withDefaults())
+            .csrf(csrf -> csrf
+                .ignoringRequestMatchers("/h2-console/**", "/auth/**")
+            );
 
         return http.build();
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(UserDetailsService userDetailsService,
+    public AuthenticationManager authenticationManager(
+            UserDetailsService userDetailsService,
             BCryptPasswordEncoder passwordEncoder) {
-        DaoAuthenticationProvider authenticationProvider = new DaoAuthenticationProvider();
-        authenticationProvider.setUserDetailsService(userDetailsService);
-        authenticationProvider.setPasswordEncoder(passwordEncoder);
 
-        return new ProviderManager(authenticationProvider);
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder);
+
+        return new ProviderManager(authProvider);
     }
 
     @Bean
@@ -63,22 +64,32 @@ public class SecurityConfig {
     @Bean
     public JdbcUserDetailsManager userDetailsService(DataSource dataSource) {
         JdbcUserDetailsManager manager = new JdbcUserDetailsManager(dataSource);
-        BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
         UserDetails admin = User.builder()
                 .username("admin@java.com")
-                .password(passwordEncoder.encode("adpass"))
+                .password(encoder.encode("adpass"))
                 .roles("ADMIN")
                 .build();
 
-        manager.createUser(admin);
+        UserDetails user = User.builder()
+                .username("user@java.com")
+                .password(encoder.encode("user"))
+                .roles("USER")
+                .build();
+
+        if (!manager.userExists(admin.getUsername())) {
+            manager.createUser(admin);
+        }
+        if (!manager.userExists(user.getUsername())) {
+            manager.createUser(user);
+        }
+
         return manager;
     }
 
-    // created the password encoder
     @Bean
     public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-
 }
